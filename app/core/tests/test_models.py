@@ -4,6 +4,7 @@ Tests for models
 from django.test import TestCase # noqa
 from django.contrib.auth import get_user_model # noqa
 
+
 class ModelTests(TestCase):
     """Test models"""
 
