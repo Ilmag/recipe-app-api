@@ -1,8 +1,12 @@
 """
 Tests for models
 """
+from decimal import Decimal
+
 from django.test import TestCase # noqa
 from django.contrib.auth import get_user_model # noqa
+
+from core import models # noqa
 
 
 class ModelTests(TestCase):
@@ -46,3 +50,19 @@ class ModelTests(TestCase):
         """Test that creating a user without an email raises a ValueError."""
         with self.assertRaises(ValueError):
             get_user_model().objects.create_user('', 'test123')
+
+    def test_create_recipe(self):
+        """Test creating a recipe is successful."""
+        user = get_user_model().objects.create_user(
+            'test@example.com',
+            'testpass123',
+        )
+        recipe = models.Recipe.objects.create(
+            user=user,
+            title='Sample recipe name',
+            time_minutes=5,
+            price=Decimal('5.50'),
+            description='Sample receipe description.',
+        )
+
+        self.assertEqual(str(recipe), recipe.title)
