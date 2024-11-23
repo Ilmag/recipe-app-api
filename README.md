@@ -107,3 +107,31 @@ exclude =
 
 run docker-compose run --rm app sh -c "flake"
 
+Create project:
+docker-compose run --rm app sh -c "django-admin startproject app ."
+
+run docker-compose up
+
+******* GitHub Actions *******
+
+Create .github/workflows/checks.yml
+# checks.yml
+on: [push]
+
+jobs:
+  test-lint:
+    name: Test and Lint
+    runs-on: ubuntu 20.04
+    steps:
+      - name: Login to Docker Hub
+        uses: docker/login-action@v1
+        with:
+          username: ${{ secrets.DOCKERHUB_USER }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+      - name: Checkout
+        uses: actions/checkout@v2
+      - name: Test
+        run: docker compose run --rm app sh -c "python manage.py test"
+      - name: Lint
+        run: docker compose run --rm app sh -c "flake8"
+# End checks.yml
