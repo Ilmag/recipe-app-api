@@ -135,3 +135,49 @@ jobs:
       - name: Lint
         run: docker compose run --rm app sh -c "flake8"
 # End checks.yml
+
+Commit and push.
+
+Remove version line in docker-compose.yml
+
+******* TDD with *******
+******* DB *******
+In docker-compose.yml after sh -c "python manage.py runserver 0.0.0.0:8000" add:
+# docker-compose.yml
+    environment:
+      - DB_HOST=db
+      - DB_NAME=devdb
+      - DB_USER=devuser
+      - DB_PASS=changeme
+    depends_on:
+      - db
+
+  db:
+    image: postgres:13-alpine
+    volumes:
+      - dev-db-data:/var/lib/postgresql/data
+    environment:
+      - POSTGRES_DB=devdb
+      - POSTGRES_USER=devuser
+      - POSTGRES_PASSWORD=changeme
+# END docker-compose.yml
+
+In Dockerfile after /py/bin/pip install --upgrade pip && \ add:
+
+apk add --update --no-cache postgresql-client && \
+    apk add --update --no-cache --virtual .tmp-build-deps \
+        build-base postgresql-dev musl-dev && \
+
+after rm -rf /tmp && \ add:
+
+apk del .tmp-build-deps && \
+
+In requirements.txt add:
+
+psycopg2>=2.8.6,<2.9
+
+Run:
+
+docker-compose down
+docker-compose build
+
