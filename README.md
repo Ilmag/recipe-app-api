@@ -121,7 +121,7 @@ on: [push]
 jobs:
   test-lint:
     name: Test and Lint
-    runs-on: ubuntu 20.04
+    runs-on: ubuntu-20.04
     steps:
       - name: Login to Docker Hub
         uses: docker/login-action@v1
@@ -181,3 +181,133 @@ Run:
 docker-compose down
 docker-compose build
 
+In app/app/settings.py add:
+
+import os
+
+edit:
+
+DATABASES = {
+    'default': {
+        'ENGINE': 'django.db.backends.postgresql',
+        'HOST': os.environ.get('DB_HOST'),
+        'NAME': os.environ.get('DB_NAME'),
+        'USER': os.environ.get('DB_USER'),
+        'PASSWORD': os.environ.get('DB_PASS'),
+    }
+}
+
+***Create core app***
+
+Run:
+
+docker-compose run --rm app sh -c "python manage.py startapp core"
+
+In core delete tests.py, views.py, create dir tests, add __init__.py to tests. Add core to settings installed apps.
+
+***Fixing DB race***
+
+In core create management/commands/wait_for_db.py (__init__.py in both directories):
+
+"""
+Django command to wait for the database to be available.
+"""
+from django.core.management.base import BaseCommand
+
+
+class Command(BaseCommand):
+    """Django command to wait for database."""
+
+    def handle(self, *args, **options):
+        pass
+
+Create tests/test_commands.py:
+
+# Start
+"""
+Test custom Django management commands.
+"""
+from unittest.mock import patch
+
+from psycopg2 import OperationalError as Psycopg2OpError
+
+from django.core.management import call_command
+from django.db.utils import OperationalError
+from django.test import SimpleTestCase
+
+
+@patch('core.management.commands.wait_for_db.Command.check')
+class CommandTests(SimpleTestCase):
+    """Test commands."""
+
+    def test_wait_for_db_ready(self, patched_check):
+        """Test waiting for database if database ready."""
+        patched_check.return_value = True
+
+        call_command('wait_for_db')
+
+        patched_check.assert_called_once_with(databases=['default'])
+
+# End
+
+Run:
+
+docker-compose run --rm app sh -c "python manage.py test"
+
+Test fails - wait_for_db.py not implemented yet.
+
+Add negative test case:
+
+@patch('time.sleep')
+    def test_wait_for_db_delay(self, patched_sleep, patched_check):
+        """Test waiting for database when getting OperationalError."""
+        patched_check.side_effect = [Psycopg2OpError] * 2 + \
+            [OperationalError] * 3 + [True]
+
+        call_command('wait_for_db')
+
+        self.assertEqual(patched_check.call_count, 6)
+        patched_check.assert_called_with(databases=['default'])
+
+edit wait_for_db.py:
+
+"""
+Django command to wait for the database to be available.
+"""
+import time
+
+from psycopg2 import OperationalError as Psycopg2OpError # noqa
+
+from django.db.utils import OperationalError # noqa
+from django.core.management.base import BaseCommand # noqa
+
+
+class Command(BaseCommand):
+    """Django command to wait for database."""
+
+    def handle(self, *args, **options):
+        self.stdout.write('Waiting for database...')
+        db_up = False
+        while db_up is False:
+            try:
+                self.check(databases=['default'])
+                db_up = True
+            except (Psycopg2OpError, OperationalError):
+                self.stdout.write('Database unavailable, waiting 1 second...')
+                time.sleep(1)
+        self.stdout.write(self.style.SUCCESS('Database available!'))
+
+run docker-compose run --rm app sh -c "python manage.py test"
+
+Add wait_for_db command and migrate command to docker-compose.
+
+command: >
+      sh -c "python manage.py wait_for_db &&
+             python manage.py migrate &&
+             python manage.py runserver 0.0.0.0:8000"
+
+run docker-compose down, docker-compose up
+
+In checks.yml add python manage.py wait_for_db && before python manage.py test
+
+commit and push
